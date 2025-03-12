@@ -5,10 +5,12 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 
+// ✅ Initialize Groq API Client
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
+// ✅ Configure Cloudinary
 cloudinary.v2.config({
   cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -17,21 +19,37 @@ cloudinary.v2.config({
 
 export async function POST(req: NextRequest) {
   try {
+    console.log("🔵 Received request...");
     const { fileUrl, inputLanguage, outputLanguage } = await req.json();
 
     if (!fileUrl) {
+      console.error("❌ No file URL provided");
       return NextResponse.json({ error: "No file URL provided" }, { status: 400 });
     }
 
-    // ✅ Download file from Cloudinary
+    console.log(`📥 Fetching file from Cloudinary: ${fileUrl}`);
+    
+    // ✅ Fetch audio file from Cloudinary
     const audioResponse = await fetch(fileUrl);
+    if (!audioResponse.ok) {
+      throw new Error(`Failed to fetch file. Status: ${audioResponse.status}`);
+    }
+
     const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
 
+    // ✅ Save file to temp directory
     const tempDir = os.tmpdir();
     const tempPath = path.join(tempDir, "uploaded.mp3");
-    fs.writeFileSync(tempPath, audioBuffer);
+    await fs.promises.writeFile(tempPath, audioBuffer);
+    
+    console.log(`✅ File saved at: ${tempPath}`);
+    
+    if (!fs.existsSync(tempPath)) {
+      throw new Error("File was not saved successfully.");
+    }
 
     // ✅ Transcribe using Whisper
+    console.log("📝 Transcribing using Whisper...");
     const transcription = await groq.audio.transcriptions.create({
       file: fs.createReadStream(tempPath),
       model: "whisper-large-v3",
@@ -39,14 +57,14 @@ export async function POST(req: NextRequest) {
       response_format: "verbose_json",
     });
 
-    fs.unlinkSync(tempPath); // Cleanup after transcription
-
+    console.log("✅ Transcription complete.");
     let originalText = transcription.text.trim();
 
     // ✅ Ensure proper line breaks (like a poem/song)
     originalText = originalText.replace(/([.?!])\s*/g, "$1\n");
 
     // ✅ Translate while keeping line breaks
+    console.log(`🌍 Translating to ${outputLanguage}...`);
     const translation = await groq.chat.completions.create({
       model: "mixtral-8x7b-32768",
       messages: [
@@ -55,12 +73,23 @@ export async function POST(req: NextRequest) {
       ],
     });
 
+    console.log("✅ Translation complete.");
+
+    // ✅ Cleanup temp file
+    await fs.promises.unlink(tempPath);
+    console.log("🗑️ Temp file deleted.");
+
     return NextResponse.json({
-      original: originalText, // ✅ Line breaks (`\n`) maintained
+      original: originalText,
       translated: translation.choices[0]?.message?.content || "",
     });
-  } catch (error) {
-    console.error("Translation failed:", error);
-    return NextResponse.json({ error: "Translation failed" }, { status: 500 });
+
+  } catch (error: any) {
+    console.error("❌ Translation failed:", error);
+
+    return NextResponse.json(
+      { error: error.message || "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
