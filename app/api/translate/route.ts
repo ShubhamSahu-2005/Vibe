@@ -7,14 +7,14 @@ import os from "os";
 
 // ✅ Initialize Groq API Client
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
+  apiKey: process.env.GROQ_API_KEY || "",
 });
 
 // ✅ Configure Cloudinary
 cloudinary.v2.config({
-  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "",
+  api_key: process.env.CLOUDINARY_API_KEY || "",
+  api_secret: process.env.CLOUDINARY_API_SECRET || "",
 });
 
 export async function POST(req: NextRequest) {
@@ -84,12 +84,14 @@ export async function POST(req: NextRequest) {
       translated: translation.choices[0]?.message?.content || "",
     });
 
-  } catch (error: any) {
-    console.error("❌ Translation failed:", error);
-
-    return NextResponse.json(
-      { error: error.message || "Internal Server Error" },
-      { status: 500 }
-    );
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error("❌ Translation failed:", error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    } else {
+      console.error("❌ Unknown error:", error);
+      return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    }
   }
 }
+
