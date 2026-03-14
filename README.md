@@ -1,6 +1,4 @@
-Perfect! Now I understand what the app does. Let me create a comprehensive README for you:
 
-```markdown name=README.md
 # 🎵 Vibe - AI-Powered Audio Translation Platform
 
 Vibe is a modern web application that transcribes and translates audio files across multiple languages using cutting-edge AI technology. Upload your audio or video files, and let Vibe handle the transcription and translation in real-time.
